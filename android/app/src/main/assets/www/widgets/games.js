@@ -26,7 +26,7 @@ const rankName = (s) => {
   const division = s.rank.match(/\s([IVX]+)$/);
   return division ? tr + ' ' + division[1] : tr;
 };
-const img = (cls, src) => { const e = h('img', cls); e.alt = ''; e.decoding = 'async'; e.referrerPolicy = 'no-referrer'; if (src) e.src = src; else e.style.visibility = 'hidden'; e.onerror = () => { e.style.visibility = 'hidden'; }; return e; };
+const img = (cls, src) => { const e = h('img', cls); e.alt = ''; e.decoding = 'async'; e.referrerPolicy = 'no-referrer'; if (src) e.src = src; else e.style.display = 'none'; e.onerror = () => { e.style.display = 'none'; }; return e; };
 
 /** The empty states every Apex widget shares; null when there is data to show. */
 function apexEmpty(d) {
@@ -90,12 +90,10 @@ W['apex-rank'] = apexWidget((box, s, o) => {
 W['apex-session'] = apexWidget((box, s, o, redraw) => {
   const ss = s.session;
   const stat = (k, v) => h('div', 'ax-st', h('span', 'ax-k', k), h('b', null, v));
-  const kids = [
-    h('div', 'ax-sess-info',
-      h('span', 'ax-k ax-since', ss.active ? t('apex.since', { time: hm(ss.startedAt) }) : t('apex.waiting')),
-      h('div', 'ax-stats', stat(t('apex.kills'), ss.active ? num(ss.kills) : '—'), stat(t('apex.wins'), ss.active ? num(ss.wins) : '—'),
-        stat(t('apex.started'), ss.active ? num(ss.baseRp) : '—'))),
-  ];
+  const top = h('div', 'ax-sess-top', h('span', 'ax-k ax-since', ss.active ? t('apex.since', { time: hm(ss.startedAt) }) : t('apex.waiting')));
+  const kids = [top,
+    h('div', 'ax-stats', stat(t('apex.kills'), ss.active ? num(ss.kills) : '—'), stat(t('apex.wins'), ss.active ? num(ss.wins) : '—'),
+      stat(t('apex.started'), ss.active ? num(ss.baseRp) : '—'))];
   if (o.button !== false) {
     const btn = h('button', 'ax-start', h('span', 'ax-start-ic', '▶'), h('span', null, t('apex.startSession')));
     btn.addEventListener('click', async () => {
@@ -107,7 +105,7 @@ W['apex-session'] = apexWidget((box, s, o, redraw) => {
       } catch (_) { toast(t('panel.pcNoAnswer'), 'err'); }
       setTimeout(async () => { try { await loadApex(0); } catch (_) {} btn.classList.remove('busy'); redraw(); }, 2500);
     });
-    kids.push(btn);
+    top.append(btn);
   }
   box.replaceChildren(...kids);
 });
