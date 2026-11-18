@@ -24,7 +24,7 @@ W.clock = {
     const date = o.date !== false ? h('div', 'date') : null;
     const wx = o.weather !== false ? wxBlock() : null;
     box.append(status || '', h('div', 'clock', hh, h('span', 'colon', ':'), mm, ss, ap), date || '', wx || '');
-    box.style.setProperty('--tf', (0.84 - (status ? 0.1 : 0) - (date ? 0.11 : 0) - (wx ? 0.2 : 0)).toFixed(2));
+    box.style.setProperty('--tf', (0.84 - (status ? 0.1 : 0) - (date ? 0.13 : 0) - (wx ? 0.24 : 0)).toFixed(2));
     return {
       // without the weather line the clock must not make the panel fetch the weather
       needs: wx ? W.clock.needs : W.clock.needs.filter((k) => k !== 'weather'),
