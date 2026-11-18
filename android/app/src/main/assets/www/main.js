@@ -332,7 +332,12 @@ export const netMax = () => Math.max(1, ...hist.down, ...hist.up) * 1.15;
 
 export const METRICS = {
   cpu: { label: 'CPU', name: 'Processor', color: '--cpu', unit: '%', max: () => 100, val: (s) => s.pc?.cpu,
-    sub: (s) => (s.pc?.cpuTemp != null ? `${Math.round(s.pc.cpuTemp)}°C` : shortCpu(s.pc?.cpuName)), title: (s) => s.pc?.cpuName },
+    sub: (s) => {
+      const p = s.pc;
+      const parts = [p?.cpuTemp != null ? `${Math.round(p.cpuTemp)}°C` : null, p?.cpuVolt != null ? `${p.cpuVolt.toFixed(2)} V` : null,
+        p?.cpuPower != null ? `${Math.round(p.cpuPower)} W` : null].filter(Boolean);
+      return parts.length ? parts.join(' · ') : shortCpu(p?.cpuName);
+    }, title: (s) => s.pc?.cpuName },
   gpu: { label: 'GPU', name: 'Graphics', color: '--gpu', unit: '%', max: () => 100, val: (s) => gpuOf(s)?.util,
     sub: (s) => {
       const g = gpuOf(s);

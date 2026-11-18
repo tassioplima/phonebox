@@ -127,3 +127,32 @@ public sealed class ApexMonitorTests : IDisposable
         Assert.NotNull(Monitor("").StartSession());
     }
 }
+
+public sealed class CpuVoltPowerTests
+{
+    [Fact]
+    public void ReadsTheCpuVoltageAndPackagePowerFromLibreHardwareMonitor()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            { "Text": "Sensor", "Children": [ { "Text": "PC", "Children": [
+              { "Text": "MS-7C95", "HardwareId": "/motherboard", "Children": [ { "Text": "Nuvoton", "Children": [
+                { "Text": "Voltages", "Children": [ { "Text": "Vcore", "Type": "Voltage", "Value": "0,982 V" } ] } ] } ] },
+              { "Text": "AMD Ryzen 9 5900X", "HardwareId": "/amdcpu/0", "Children": [
+                { "Text": "Voltages", "Children": [ { "Text": "Core (SVI2 TFN)", "Type": "Voltage", "Value": "1,394 V" } ] },
+                { "Text": "Powers", "Children": [ { "Text": "Package", "Type": "Power", "Value": "107,1 W" } ] } ] } ] } ] }
+            """);
+        var (volt, power) = SystemMonitor.FindCpuVoltPower(doc.RootElement);
+        Assert.Equal(1.394, volt);
+        Assert.Equal(107.1, power);
+    }
+
+    [Fact]
+    public void FallsBackToTheBoardVcoreWhenTheCpuHasNoVoltage()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            { "Text": "Sensor", "Children": [ { "Text": "Nuvoton", "Children": [ { "Text": "Vcore", "Type": "Voltage", "Value": "1.250 V" } ] },
+              { "Text": "Intel Core i7", "HardwareId": "/intelcpu/0", "Children": [ { "Text": "CPU Package", "Type": "Power", "Value": "65.0 W" } ] } ] }
+            """);
+        Assert.Equal((1.25, 65.0), SystemMonitor.FindCpuVoltPower(doc.RootElement));
+    }
+}

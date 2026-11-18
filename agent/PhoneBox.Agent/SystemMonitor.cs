@@ -23,7 +23,7 @@ public sealed record DiskInfo(string Name, double UsedGb, double TotalGb);
 
 public sealed record PcSnapshot(double? Cpu, double? CpuTemp, string CpuName, double RamUsedGb, double RamTotalGb,
     GpuInfo? Gpu, double NetDownBps, double NetUpBps, IReadOnlyList<DiskInfo> Disks, long UptimeSec,
-    IReadOnlyList<GpuInfo>? Gpus = null);
+    IReadOnlyList<GpuInfo>? Gpus = null, double? CpuVolt = null, double? CpuPower = null);
 
 /// <summary>Samples CPU, RAM, network, disk and GPU metrics once a second.</summary>
 public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStore? config = null) : BackgroundService
@@ -34,7 +34,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
     private volatile PcSnapshot? _snap;
     // GPU sources, highest priority first: nvidia-smi, LibreHardwareMonitor, the OS (D3DKMT + counters / sysfs / ioreg)
     private volatile IReadOnlyList<GpuInfo>? _nvidia, _lhmGpus, _osGpus;
-    private double? _cpuTemp;
+    private double? _cpuTemp, _cpuVolt, _cpuPower;
     private IReadOnlyList<DiskInfo> _disks = [];
 
     public PcSnapshot? Snapshot() => _snap;
@@ -73,6 +73,8 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
             _snap = new PcSnapshot(
                 Cpu: cpu is { } c ? Math.Round(c, 1) : null,
                 CpuTemp: _cpuTemp,
+                CpuVolt: _cpuVolt,
+                CpuPower: _cpuPower,
                 CpuName: _cpuName,
                 RamUsedGb: Math.Round(memUsed / Gb, 1),
                 RamTotalGb: Math.Round(memTotal / Gb, 1),
@@ -217,6 +219,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
             {
                 using var doc = JsonDocument.Parse(await _http.GetStringAsync("http://127.0.0.1:8085/data.json", ct));
                 _cpuTemp = FindCpuTemp(doc.RootElement);
+                (_cpuVolt, _cpuPower) = FindCpuVoltPower(doc.RootElement);
                 try { _lhmGpus = Gpus.ParseLhm(doc.RootElement); }
                 catch (Exception ex)
                 {
@@ -228,6 +231,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
             catch
             {
                 _cpuTemp = null;
+                _cpuVolt = _cpuPower = null;
                 _lhmGpus = null;
                 delay = TimeSpan.FromSeconds(30);
             }
@@ -261,6 +265,44 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
         Visit(root, false);
         return hottest;
     }
+
+    private static readonly string[] CpuVoltNames = ["Core (SVI2 TFN)", "Core (SVI3 TFN)", "CPU Core", "Core (SVI2)", "Core"];
+    private static readonly string[] CpuPowerNames = ["Package", "CPU Package"];
+
+    /// <summary>
+    /// The CPU core voltage and package power from LibreHardwareMonitor: read under the CPU's own node (AMD SVI2/SVI3,
+    /// Intel "CPU Core"); when the CPU reports no voltage, the motherboard chip's "Vcore" is used instead.
+    /// </summary>
+    internal static (double? Volt, double? Power) FindCpuVoltPower(JsonElement root)
+    {
+        double? volt = null, power = null, boardVcore = null;
+        void Visit(JsonElement node, bool inCpu)
+        {
+            if (node.ValueKind != JsonValueKind.Object) return;
+            inCpu = inCpu || IsCpuNode(node);
+            if (StrProp(node, "Text") is { } name && StrProp(node, "Value") is { } value && ParseVoltOrPower(value) is { } p)
+            {
+                if (inCpu && p.Kind == "volt" && volt is null && CpuVoltNames.Contains(name)) volt = p.Value;
+                else if (inCpu && p.Kind == "power" && power is null && CpuPowerNames.Contains(name)) power = p.Value;
+                else if (!inCpu && p.Kind == "volt" && boardVcore is null && name.Equals("Vcore", StringComparison.OrdinalIgnoreCase)) boardVcore = p.Value;
+            }
+            if (node.TryGetProperty("Children", out var kids) && kids.ValueKind == JsonValueKind.Array)
+                foreach (var k in kids.EnumerateArray()) Visit(k, inCpu);
+        }
+        Visit(root, false);
+        return (volt ?? boardVcore, power);
+    }
+
+    /// <summary>"1,394 V" / "1.394 V" / "982 mV" as volts, "107,1 W" as watts (any decimal separator).</summary>
+    private static (string Kind, double Value)? ParseVoltOrPower(string value)
+    {
+        var m = VoltPower().Match(value);
+        if (!m.Success || !double.TryParse(m.Groups[1].Value.Replace(',', '.'), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v)) return null;
+        return m.Groups[2].Value switch { "V" => ("volt", v), "mV" => ("volt", v / 1000), _ => ("power", v) };
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^\s*(-?\d+(?:[.,]\d+)?)\s*(V|mV|W)\s*$")]
+    private static partial System.Text.RegularExpressions.Regex VoltPower();
 
     /// <summary>A string property of an object node; null when it is missing or not a string.</summary>
     private static string? StrProp(JsonElement node, string name) =>
