@@ -88,6 +88,7 @@ AddMonitor<CalendarMonitor>(builder.Services);
 AddMonitor<DockerMonitor>(builder.Services);
 AddMonitor<ObsMonitor>(builder.Services);
 AddMonitor<DiscordMonitor>(builder.Services);
+AddMonitor<ApexMonitor>(builder.Services);
 AddMonitor<BatteryMonitor>(builder.Services);
 AddMonitor<RuleEngine>(builder.Services);
 AddMonitor<ChargeGuard>(builder.Services);
@@ -551,10 +552,21 @@ app.MapGet("/api/obs", (ObsMonitor obs, ConfigStore cfg) => Results.Json(new
     snapshot = obs.Snapshot(),
     control = cfg.Get().Widgets(enabledPagesOnly: true).Any(w => (w.Type == "obs" || w.Type.StartsWith("obs-")) && w.Bool("control") == true),
 }));
+app.MapPost("/api/obs/golive", async (string? profile, ObsMonitor obs) =>
+    await obs.GoLiveAsync(profile) is { } error ? Results.BadRequest(new { error }) : Results.Ok(new { ok = true }));
 app.MapPost("/api/obs/{action}", async (string action, string? scene, ObsMonitor obs) =>
     await obs.ActAsync(action, scene) is { } error ? Results.BadRequest(new { error }) : Results.Ok(new { ok = true }));
 // Settings › General › OBS › Test (local only: deliberately not under /api/obs, which the phone may reach over Wi-Fi)
 app.MapPost("/api/obs-test", async (ObsConfig body) => Results.Json(new { result = await ObsMonitor.TestAsync(body.Url, body.Password) }));
+
+// Apex Legends (Games widgets): ranked stats from TAS.gg and the session kept on this computer; Start session restarts it.
+app.MapGet("/api/apex", (ApexMonitor apex, ConfigStore cfg) => Results.Json(new
+{
+    configured = ApexMonitor.Channel(cfg.Get()) is not null,
+    snapshot = apex.Snapshot(),
+}));
+app.MapPost("/api/apex/session", (ApexMonitor apex) =>
+    apex.StartSession() is { } error ? Results.BadRequest(new { error }) : Results.Ok(new { ok = true }));
 
 // Discord (widget): voice channel, mute / deafen, joinable voice channels, notifications; buttons only if a widget allows control.
 app.MapGet("/api/discord", (DiscordMonitor dc, ConfigStore cfg) => Results.Json(new

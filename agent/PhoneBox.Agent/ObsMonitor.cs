@@ -8,7 +8,8 @@ using System.Text.Json.Nodes;
 namespace PhoneBox.Agent;
 
 public sealed record ObsSnapshot(bool Connected, string? Error, bool Streaming, long StreamMs, bool Recording, bool RecordPaused, long RecordMs,
-    string? Scene, IReadOnlyList<string> Scenes, bool? MicMuted, string? MicName);
+    string? Scene, IReadOnlyList<string> Scenes, bool? MicMuted, string? MicName,
+    string? Profile = null, IReadOnlyList<string>? Profiles = null, bool Reconnecting = false, int SkippedFrames = 0, int TotalFrames = 0);
 
 /// <summary>
 /// OBS Studio through obs-websocket 5 (built into OBS 28+; Tools › WebSocket Server Settings). Keeps one connection
@@ -80,6 +81,7 @@ public sealed partial class ObsMonitor(ConfigStore config, ILogger<ObsMonitor> l
                 var stream = await Request("GetStreamStatus", null, ct);
                 var record = await Request("GetRecordStatus", null, ct);
                 var scenes = await Request("GetSceneList", null, ct);
+                var profiles = await Request("GetProfileList", null, ct);
                 mic ??= (await Request("GetSpecialInputs", null, ct))?["mic1"]?.GetValue<string>();
                 bool? muted = mic is null ? null : (await Request("GetInputMute", new JsonObject { ["inputName"] = mic }, ct))?["inputMuted"]?.GetValue<bool>();
                 _snap = new ObsSnapshot(true, null,
@@ -88,7 +90,11 @@ public sealed partial class ObsMonitor(ConfigStore config, ILogger<ObsMonitor> l
                     scenes?["currentProgramSceneName"]?.GetValue<string>(),
                     // OBS lists scenes bottom-up
                     scenes?["scenes"]?.AsArray().Select(s => s?["sceneName"]?.GetValue<string>() ?? "").Where(s => s != "").Reverse().ToList() ?? [],
-                    muted, mic);
+                    muted, mic,
+                    profiles?["currentProfileName"]?.GetValue<string>(),
+                    profiles?["profiles"]?.AsArray().Select(s => s?.GetValue<string>() ?? "").Where(s => s != "").ToList() ?? [],
+                    stream?["outputReconnecting"]?.GetValue<bool>() ?? false,
+                    stream?["outputSkippedFrames"]?.GetValue<int>() ?? 0, stream?["outputTotalFrames"]?.GetValue<int>() ?? 0);
                 await Task.Delay(2000, ct);
             }
         }
@@ -169,6 +175,50 @@ public sealed partial class ObsMonitor(ConfigStore config, ILogger<ObsMonitor> l
             }
             log.LogInformation("obs: {Action} {Scene}", action, scene);
             return null;
+        }
+        catch (Exception ex) { return ex.Message; }
+    }
+
+    /// <summary>
+    /// The Go live widget: switches OBS to the button's profile (each profile keeps its own service, stream key and
+    /// output quality, e.g. "Twitch" and "YouTube") and starts streaming. A stream already running on another profile is
+    /// stopped first; one already live on this profile is left alone. Fails when OBS does not go live within five seconds,
+    /// which is what a missing stream key looks like.
+    /// </summary>
+    public async Task<string?> GoLiveAsync(string? profile)
+    {
+        if (!config.Get().Widgets(enabledPagesOnly: true).Any(w => w.Type == "obs-golive" && w.Bool("control") == true))
+            return "going live is turned off in the widget's settings";
+        if (string.IsNullOrEmpty(profile) || _snap.Profiles is not { } profiles || !profiles.Contains(profile))
+            return "OBS has no profile with this name";
+        try
+        {
+            var ct = CancellationToken.None;
+            var live = (await Request("GetStreamStatus", null, ct))?["outputActive"]?.GetValue<bool>() == true;
+            var current = (await Request("GetProfileList", null, ct))?["currentProfileName"]?.GetValue<string>();
+            if (live && current == profile) return null;
+            if (live)
+            {
+                await Request("StopStream", null, ct);
+                for (var i = 0; i < 40 && (await Request("GetStreamStatus", null, ct))?["outputActive"]?.GetValue<bool>() == true; i++)
+                    await Task.Delay(250, ct);
+            }
+            if (current != profile)
+            {
+                await Request("SetCurrentProfile", new JsonObject { ["profileName"] = profile }, ct);
+                await Task.Delay(800, ct); // OBS reloads the profile's outputs
+            }
+            await Request("StartStream", null, ct);
+            for (var i = 0; i < 20; i++)
+            {
+                await Task.Delay(250, ct);
+                if ((await Request("GetStreamStatus", null, ct))?["outputActive"]?.GetValue<bool>() == true)
+                {
+                    log.LogInformation("obs: live on profile {Profile}", profile);
+                    return null;
+                }
+            }
+            return $"OBS could not go live on {profile}: check Settings › Stream in that profile (account or stream key)";
         }
         catch (Exception ex) { return ex.Message; }
     }

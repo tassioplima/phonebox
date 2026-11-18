@@ -222,7 +222,16 @@
     return { enabled: true, control: true, snapshot: {
       connected: true, error: null, streaming: !!obs.streamingSince, streamMs: obs.streamingSince ? now() - obs.streamingSince : 0,
       recording: !!obs.recordingSince, recordPaused: obs.paused, recordMs: obs.recordingSince ? now() - obs.recordingSince : 0,
-      scene: obs.scene, scenes: ['Desk', 'Camera', 'Screen share', 'BRB'], micMuted: obs.mic, micName: 'Mic/Aux' } };
+      scene: obs.scene, scenes: ['Desk', 'Camera', 'Screen share', 'BRB'], micMuted: obs.mic, micName: 'Mic/Aux',
+      profile: obs.profile || 'Twitch', profiles: ['Twitch', 'YouTube'], reconnecting: false, skippedFrames: obs.streamingSince ? 12 : 0, totalFrames: obs.streamingSince ? Math.round((now() - obs.streamingSince) * 0.06) : 0 } };
+  }
+
+  // made-up Apex Legends ranked stats (the Games widgets); Start session restarts the session at the current RP
+  const apex = { rp: 9120, base: 8967, startedAt: Date.now() - 42 * 60_000, games: [{ rp: -24, total: 8943, at: Date.now() - 30 * 60_000, kills: 1 }, { rp: 177, total: 9120, at: Date.now() - 9 * 60_000, kills: 3 }] };
+  function apexState() {
+    const ses = apex.startedAt ? { active: true, startedAt: apex.startedAt, baseRp: apex.base, rp: apex.rp - apex.base, kills: 4, wins: 0, games: apex.games } : { active: false, games: [] };
+    return { configured: true, snapshot: { configured: true, error: null, updatedAt: now(), rank: 'Platinum IV', tier: 'RANK_PLATINUM', division: 4, rp: apex.rp, rankIcon: null, predatorPosition: null,
+      next: { name: 'Diamond', remaining: 12000 - apex.rp, percent: 18.6, icon: null }, level: 79, prestige: '3rd', legend: 'Octane', legendIcon: null, brKills: 13480, careerKills: 43459, brWins: 826, session: ses } };
   }
 
   // made-up Home Assistant entities; switching flips them
@@ -552,7 +561,9 @@
     if (path === '/api/quotas') return json(quotas());
     if (path === '/api/calendar') return json(calendar());
     if (path === '/api/docker') return json({ ...docker(), control: allows(await config(), (t) => t === 'docker') });
-    if (path === '/api/obs') { const c = await config(); return json({ ...obsState(), enabled: c.obs?.enabled !== false, control: widgets(c).some((w) => w.type === 'obs' && w.options?.control === true) }); }
+    if (path === '/api/obs') { const c = await config(); return json({ ...obsState(), enabled: c.obs?.enabled !== false, control: widgets(c).some((w) => (w.type === 'obs' || w.type.startsWith('obs-')) && w.options?.control === true) }); }
+    if (path === '/api/apex') return json(apexState());
+    if (path === '/api/apex/session' && method === 'POST') { apex.base = apex.rp; apex.startedAt = now(); apex.games = []; return json({ ok: true }); }
     if (path === '/api/discord') {
       const c = await config();
       return json({ enabled: true, control: widgets(c).some((w) => w.type === 'discord' && w.options?.control === true), snapshot: {
@@ -635,6 +646,11 @@
       const [, , , profile, slot] = path.split('/');
       const ok = profile === DEMO_CONSOLE.id && (/^dial-(left|right|press)$/.test(slot) || (/^k(0|[1-9]\d*)$/.test(slot) && +slot.slice(1) < DEMO_CONSOLE.keys.length));
       return ok ? json({ ok: true }) : json({ error: 'nothing is set for this key' }, 404);
+    }
+    if (path === '/api/obs/golive' && method === 'POST') {
+      if (!widgets(await config()).some((w) => w.type === 'obs-golive' && w.options?.control === true)) return json({ error: "going live is turned off in the widget's settings" }, 400);
+      obs.profile = q.get('profile') || obs.profile; obs.streamingSince = obs.streamingSince || now();
+      return json({ ok: true });
     }
     if (path.startsWith('/api/obs/') && method === 'POST') {
       if (!allows(await config(), isObs)) return json({ error: "controlling OBS is turned off in the widget's settings" }, 400);

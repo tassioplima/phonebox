@@ -39,6 +39,8 @@ public sealed class AgentConfig
     public ObsConfig Obs { get; set; } = new();
     /// <summary>Discord desktop app (local IPC): the developer application's client id and secret (the secret never goes to the phone).</summary>
     public DiscordConfig Discord { get; set; } = new();
+    /// <summary>Apex Legends widgets: the TAS.gg channel (Twitch user id) whose public ranked stats they show (never goes to the phone).</summary>
+    public ApexConfig Apex { get; set; } = new();
     /// <summary>App console widget: key and dial bindings per app (the phone gets labels and ids, not the keys to press).</summary>
     public ConsoleConfig Console { get; set; } = new();
 
@@ -319,6 +321,12 @@ public sealed class ObsConfig
     public string? Password { get; set; }
 }
 
+public sealed class ApexConfig
+{
+    /// <summary>The Twitch user id TAS.gg (Twitch Apex Stats) files the linked game account under (digits only).</summary>
+    public string? TasChannel { get; set; }
+}
+
 public sealed class DiscordConfig
 {
     public bool Enabled { get; set; }
@@ -592,6 +600,8 @@ public sealed partial class ConfigStore(string path)
         c.Ping ??= new();
         c.Ping.Adapters = (c.Ping.Adapters ?? []).Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(16).ToList();
         c.Obs ??= new();
+        c.Apex ??= new();
+        c.Apex.TasChannel = new string((c.Apex.TasChannel ?? "").Where(char.IsAsciiDigit).ToArray()) is { Length: > 0 } tas ? tas : null;
         c.Discord ??= new();
         c.Discord.ClientId = string.IsNullOrWhiteSpace(c.Discord.ClientId) ? null : c.Discord.ClientId.Trim();
         c.Discord.ClientSecret = string.IsNullOrWhiteSpace(c.Discord.ClientSecret) ? null : c.Discord.ClientSecret.Trim();

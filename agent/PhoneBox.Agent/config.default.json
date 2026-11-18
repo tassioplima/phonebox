@@ -14,6 +14,8 @@
   "ping": { "host": "1.1.1.1", "adapters": [] },
   // Discord widget: talks to the Discord desktop app on this computer. Create an application at discord.com/developers/applications, add the redirect http://127.0.0.1, and enter its client ID and secret (see docs/DISCORD.md)
   "discord": { "enabled": false, "clientId": null, "clientSecret": null },
+  // Apex Legends widgets (Games): the Twitch user id TAS.gg (tas.gg) files your linked game account under; its public ranked stats are read once a minute while an Apex widget is shown
+  "apex": { "tasChannel": null },
   // App console widget (Windows): keys and dial bindings per app, matched by the focused window's process name
   "console": { "profiles": [] },
 

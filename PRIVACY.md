@@ -59,6 +59,7 @@ identifies your GitHub account to GitHub.
 | Feature | Where | What is sent |
 |---|---|---|
 | Discord widget | `discord.com/api/oauth2/token`, once at login and when the token needs renewing; `cdn.discordapp.com`, once per server icon and avatar shown (the agent fetches them, the phone never contacts Discord; the rest goes through the Discord app on this PC, locally). Turn off in **Settings › General › Discord** | The application's client ID and secret, and the one-time login code or the saved refresh token; for images only the image's id and hash, which Discord already knows |
+| Apex Legends widgets (Games) | `api.tas.gg` (TAS.gg, Twitch Apex Stats), once a minute and only while an enabled page shows an Apex widget; the agent asks, the phone never contacts TAS.gg. Turn off by clearing the channel in **Settings › General › Apex Legends**, or by removing the widgets. Rank badge and legend images come from `assets.tas.gg` on the phone | The TAS.gg channel id you enter (your Twitch user id); TAS.gg already publishes these stats for its overlays. The ranked session and game history stay in `apex-session.json` on this computer |
 | GitHub widget | `api.github.com`, through your own GitHub CLI (`gh`) | Whatever `gh` sends with its own sign-in |
 | Hacker News widget (phone) | `hacker-news.firebaseio.com` | Nothing but the request |
 | Exchange rates widget (phone) | `api.frankfurter.dev` | The currencies you chose |

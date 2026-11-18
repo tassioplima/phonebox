@@ -488,6 +488,14 @@ dd { margin: 0; word-break: break-all; }
       </div>
 
       <div class="card">
+        <h3>Apex Legends</h3>
+        <p class="hint" style="margin:0 0 12px">For the <b>Games</b> widgets (rank, ranked session, account). Link your game account on <a href="https://tas.gg" target="_blank" rel="noopener">tas.gg</a> (Twitch Apex Stats), then enter the channel id from your overlay links there: the number in <code>overlays.tas.gg/<b>123456789</b>/…</code>. Its public ranked stats are read once a minute while an Apex widget is shown; the session and game history stay on this computer.</p>
+        <div class="grid2">
+          <div class="field"><label>TAS.gg channel id</label><input type="text" inputmode="numeric" data-bind="apex.tasChannel" placeholder="123456789" spellcheck="false"></div>
+        </div>
+      </div>
+
+      <div class="card">
         <h3 data-i18n="s.obs.title">OBS Studio</h3>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="obs.enabled"><span></span></label> <span data-i18n-html="s.obs.enable">Connect to OBS (for the <b>OBS</b> widget, the On air widget and rules)</span></div>
         <p class="hint" style="margin:0 0 12px" data-i18n-html="s.obs.hint">In OBS: Tools › WebSocket Server Settings › <i>Enable WebSocket server</i>; copy the password from <i>Show Connect Info</i>.</p>
@@ -1932,7 +1940,7 @@ const RULE_PRESETS = [
 let activeRules = [];
 
 function renderRules() {
-  cfg.rules ??= []; cfg.calendars ??= []; cfg.feeds ??= []; cfg.cameras ??= { ffmpeg: '', sources: [] }; cfg.photos ??= { folder: '', subfolders: true }; cfg.console ??= { profiles: [] }; cfg.phones ??= []; cfg.homeAssistant ??= {}; cfg.obs ??= { enabled: false, url: 'ws://127.0.0.1:4455' }; cfg.discord ??= { enabled: false };
+  cfg.rules ??= []; cfg.calendars ??= []; cfg.feeds ??= []; cfg.cameras ??= { ffmpeg: '', sources: [] }; cfg.photos ??= { folder: '', subfolders: true }; cfg.console ??= { profiles: [] }; cfg.phones ??= []; cfg.homeAssistant ??= {}; cfg.obs ??= { enabled: false, url: 'ws://127.0.0.1:4455' }; cfg.discord ??= { enabled: false }; cfg.apex ??= { tasChannel: null };
   $('rulePresets').replaceChildren(...RULE_PRESETS.map(([label, make]) => h('button', { class: 'btn', onclick: () => {
     cfg.rules.push({ id: '', enabled: true, ...make() });
     renderRules(); changed();
