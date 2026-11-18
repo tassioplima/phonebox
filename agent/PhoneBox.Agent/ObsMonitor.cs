@@ -168,6 +168,11 @@ public sealed partial class ObsMonitor(ConfigStore config, ILogger<ObsMonitor> l
                 case "record": await Request("ToggleRecord", null, CancellationToken.None); break;
                 case "pause": await Request("ToggleRecordPause", null, CancellationToken.None); break;
                 case "stream": await Request("ToggleStream", null, CancellationToken.None); break;
+                // Go live's Stop: only ever stops, so a second tap can't start the stream again
+                case "stopstream":
+                    if ((await Request("GetStreamStatus", null, CancellationToken.None))?["outputActive"]?.GetValue<bool>() == true)
+                        await Request("StopStream", null, CancellationToken.None);
+                    break;
                 case "mic" when _snap.MicName is { } mic: await Request("ToggleInputMute", new JsonObject { ["inputName"] = mic }, CancellationToken.None); break;
                 case "scene" when !string.IsNullOrEmpty(scene) && _snap.Scenes.Contains(scene):
                     await Request("SetCurrentProgramScene", new JsonObject { ["sceneName"] = scene }, CancellationToken.None); break;

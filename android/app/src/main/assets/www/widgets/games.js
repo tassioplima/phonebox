@@ -124,16 +124,22 @@ W['apex-account'] = apexWidget((box, s) => {
 W['obs-golive'] = {
   needs: ['tick'],
   create(box, { o }) {
-    let data = null, lastKey = '', fetchedAt = 0, busy = null;
+    let data = null, lastKey = '', fetchedAt = 0, busy = null, lockedUntil = 0;
     const load = async () => { try { data = await api('/obs'); fetchedAt = Date.now(); } catch (_) { return false; } };
+    // after any tap the buttons stay locked for a few seconds: Stop turns into the Go live buttons in the same spot,
+    // and a double tap must not start the stream again
+    const locked = () => Date.now() < lockedUntil;
     const dur = (ms) => { const sec = Math.max(0, Math.floor(ms / 1000)); return pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor(sec / 60) % 60) + ':' + pad(sec % 60); };
     const post = async (path) => {
+      if (locked()) return;
+      lockedUntil = Date.now() + 5000;
       haptic();
       try {
         const r = await fetch(`${API}/obs/${path}`, { method: 'POST', cache: 'no-store', headers: PANEL_HEADERS });
         if (!r.ok) toast((await r.json().catch(() => ({}))).error || 'OBS did not do it', 'err');
       } catch (_) { toast(t('panel.pcNoAnswer'), 'err'); }
       await load(); busy = null; render(true);
+      setTimeout(() => render(true), Math.max(0, lockedUntil - Date.now()) + 50);
     };
     const brand = (name) => { const n = name.toLowerCase(); return n.includes('twitch') ? 'tw' : n.includes('youtube') ? 'yt' : n.includes('kick') ? 'kk' : 'ot'; };
     const render = (force = false) => {
@@ -152,17 +158,17 @@ W['obs-golive'] = {
       const dropped = s.totalFrames ? (100 * s.skippedFrames / s.totalFrames).toFixed(1) : '0.0';
       const info = h('div', 'gl-info',
         h('span', 'gl-k', live ? t('golive.liveOn', { profile: s.profile || '' }) : t('golive.title')),
-        h('span', 'gl-st', h('i', 'gl-dot'), live ? (s.reconnecting ? t('golive.reconnecting') : dur(s.streamMs + since)) : (busy ? t('golive.starting') : t('golive.offline'))),
+        h('span', 'gl-st', h('i', 'gl-dot'), live ? (busy === 'stop' ? t('golive.stopping') : s.reconnecting ? t('golive.reconnecting') : dur(s.streamMs + since)) : (busy && busy !== 'stop' ? t('golive.starting') : t('golive.offline'))),
         h('span', 'gl-sub', live ? t('golive.dropped', { n: s.skippedFrames, pct: dropped }) : t('golive.profile', { profile: s.profile || '—' })));
-      const btns = h('div', 'gl-bts' + (busy ? ' busy' : ''));
+      const btns = h('div', 'gl-bts' + (busy || locked() ? ' busy' : ''));
       if (live) {
         const b = h('button', 'gl-b gl-stop', h('span', 'gl-ic', '■'), t('golive.stop'));
-        if (ctl) b.addEventListener('click', () => { busy = 'stop'; render(true); post('stream'); });
+        if (ctl) b.addEventListener('click', () => { if (locked()) return; busy = 'stop'; render(true); post('stopstream'); });
         btns.append(b);
       } else {
         for (const p of profiles) {
           const b = h('button', 'gl-b gl-' + brand(p), h('span', 'gl-ic', '●'), p);
-          if (ctl) b.addEventListener('click', () => { busy = p; render(true); post('golive?profile=' + encodeURIComponent(p)); });
+          if (ctl) b.addEventListener('click', () => { if (locked()) return; busy = p; render(true); post('golive?profile=' + encodeURIComponent(p)); });
           btns.append(b);
         }
         if (!profiles.length) btns.append(h('span', 'gl-sub', t('golive.noProfiles')));

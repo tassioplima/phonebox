@@ -405,7 +405,8 @@
       streamMs: o.streamMs, recordMs: o.recordMs, transitions: x.transitions, transition: x.transition, duration: x.duration, replayAvailable: true, replayActive: x.replayActive, cameraAvailable: true, cameraActive: x.cameraActive };
   }
   function obsAct(action, scene) {
-    if (action === 'stream') obs.streamingSince = obs.streamingSince ? 0 : now();
+    if (action === 'stopstream') obs.streamingSince = 0;
+    else if (action === 'stream') obs.streamingSince = obs.streamingSince ? 0 : now();
     else if (action === 'record') { obs.recordingSince = obs.recordingSince ? 0 : now(); obs.paused = false; }
     else if (action === 'pause') { if (obs.recordingSince) obs.paused = !obs.paused; }
     else if (action === 'mic') obs.mic = !obs.mic;
