@@ -186,7 +186,7 @@
       update: null, ts: now(), host: 'DESK-PC', cfgVersion: cfgVersion(), pushVersion, evSeq: seq, rules: ['music'], rulesPaused: rulesPaused > now() ? rulesPaused : null,
       events: since == null ? [] : events.filter((e) => e.seq > since),
       pc: {
-        cpu: Math.max(1, wave(37, 8, 46, 0, 6)), cpuName: 'AMD Ryzen 9 7950X 16-Core Processor', cpuTemp: wave(60, 52, 68), cpuVolt: 1.24, cpuPower: 96,
+        cpu: Math.max(1, wave(37, 8, 46, 0, 6)), cpuName: 'AMD Ryzen 9 7950X 16-Core Processor', cpuTemp: wave(60, 52, 68), cpuVolt: 1.24, cpuPower: 96, fans: [{ name: 'CPU Fan', device: 'Nuvoton NCT6687D', rpm: 1295, percent: 61 }, { name: 'Pump Fan', device: 'Nuvoton NCT6687D', rpm: 2434, percent: 100 }, { name: 'System Fan #1', device: 'Nuvoton NCT6687D', rpm: 660, percent: 45 }, { name: 'GPU Fan 1', device: 'NVIDIA GeForce RTX 4070 SUPER', rpm: 0, percent: 0 }],
         ramUsedGb: wave(120, 21, 24), ramTotalGb: 64, netDownBps: Math.max(0, wave(23, 0.2e6, 9e6, 0, 1e6)), netUpBps: Math.max(0, wave(17, 40e3, 600e3, 1, 50e3)),
         uptimeSec: 3 * 86400 + 5 * 3600 + Math.floor((now() - START) / 1000),
         disks: [{ name: 'C:', usedGb: 612, totalGb: 1000 }, { name: 'D:', usedGb: 1450, totalGb: 2000 }, { name: 'E:', usedGb: 310, totalGb: 4000 }],

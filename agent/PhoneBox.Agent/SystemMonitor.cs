@@ -23,7 +23,10 @@ public sealed record DiskInfo(string Name, double UsedGb, double TotalGb);
 
 public sealed record PcSnapshot(double? Cpu, double? CpuTemp, string CpuName, double RamUsedGb, double RamTotalGb,
     GpuInfo? Gpu, double NetDownBps, double NetUpBps, IReadOnlyList<DiskInfo> Disks, long UptimeSec,
-    IReadOnlyList<GpuInfo>? Gpus = null, double? CpuVolt = null, double? CpuPower = null);
+    IReadOnlyList<GpuInfo>? Gpus = null, double? CpuVolt = null, double? CpuPower = null, IReadOnlyList<FanInfo>? Fans = null);
+
+/// <summary>A fan from LibreHardwareMonitor: its speed, the duty its controller asks for (when known) and which device it belongs to.</summary>
+public sealed record FanInfo(string Name, string Device, double Rpm, double? Percent);
 
 /// <summary>Samples CPU, RAM, network, disk and GPU metrics once a second.</summary>
 public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStore? config = null) : BackgroundService
@@ -35,6 +38,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
     // GPU sources, highest priority first: nvidia-smi, LibreHardwareMonitor, the OS (D3DKMT + counters / sysfs / ioreg)
     private volatile IReadOnlyList<GpuInfo>? _nvidia, _lhmGpus, _osGpus;
     private double? _cpuTemp, _cpuVolt, _cpuPower;
+    private volatile IReadOnlyList<FanInfo>? _fans;
     private IReadOnlyList<DiskInfo> _disks = [];
 
     public PcSnapshot? Snapshot() => _snap;
@@ -75,6 +79,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
                 CpuTemp: _cpuTemp,
                 CpuVolt: _cpuVolt,
                 CpuPower: _cpuPower,
+                Fans: _fans,
                 CpuName: _cpuName,
                 RamUsedGb: Math.Round(memUsed / Gb, 1),
                 RamTotalGb: Math.Round(memTotal / Gb, 1),
@@ -220,6 +225,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
                 using var doc = JsonDocument.Parse(await _http.GetStringAsync("http://127.0.0.1:8085/data.json", ct));
                 _cpuTemp = FindCpuTemp(doc.RootElement);
                 (_cpuVolt, _cpuPower) = FindCpuVoltPower(doc.RootElement);
+                _fans = FindFans(doc.RootElement);
                 try { _lhmGpus = Gpus.ParseLhm(doc.RootElement); }
                 catch (Exception ex)
                 {
@@ -232,6 +238,7 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
             {
                 _cpuTemp = null;
                 _cpuVolt = _cpuPower = null;
+                _fans = null;
                 _lhmGpus = null;
                 delay = TimeSpan.FromSeconds(30);
             }
@@ -292,6 +299,55 @@ public sealed partial class SystemMonitor(ILogger<SystemMonitor> log, ConfigStor
         Visit(root, false);
         return (volt ?? boardVcore, power);
     }
+
+    /// <summary>
+    /// Fans from LibreHardwareMonitor, each paired with the control of the same name on the same device (its duty in
+    /// percent). Motherboard headers that read 0 RPM are left out (nothing is plugged in there); a graphics card's fans
+    /// are kept at 0 RPM, since cards stop them on purpose when they are cool.
+    /// </summary>
+    internal static List<FanInfo> FindFans(JsonElement root)
+    {
+        var list = new List<FanInfo>();
+        void Visit(JsonElement node, string? device, bool gpu)
+        {
+            if (node.ValueKind != JsonValueKind.Object) return;
+            if (StrProp(node, "HardwareId") is { } hw && StrProp(node, "Text") is { } hwName && !node.TryGetProperty("SensorId", out _))
+            {
+                device = hwName;
+                gpu = hw.StartsWith("/gpu", StringComparison.OrdinalIgnoreCase);
+            }
+            if (node.TryGetProperty("Children", out var kids) && kids.ValueKind == JsonValueKind.Array)
+            {
+                // a sensor group ("Fans", "Controls") holds sensors; pair them by name within this device
+                foreach (var k in kids.EnumerateArray())
+                {
+                    if (k.ValueKind != JsonValueKind.Object || StrProp(k, "Type") != "Fan" || StrProp(k, "Text") is not { } name) continue;
+                    if (StrProp(k, "Value") is not { } v || ParseRpm(v) is not { } rpm) continue;
+                    if (rpm <= 0 && !gpu) continue;
+                    list.Add(new FanInfo(name, device ?? "", rpm, null));
+                }
+                foreach (var k in kids.EnumerateArray()) Visit(k, device, gpu);
+            }
+        }
+        Visit(root, null, false);
+        // the duty of each fan: the control sensor with the same name on the same device
+        var controls = new Dictionary<(string, string), double>();
+        void Controls(JsonElement node, string? device)
+        {
+            if (node.ValueKind != JsonValueKind.Object) return;
+            if (StrProp(node, "HardwareId") is not null && StrProp(node, "Text") is { } hwName && !node.TryGetProperty("SensorId", out _)) device = hwName;
+            if (StrProp(node, "Type") == "Control" && StrProp(node, "Text") is { } n && StrProp(node, "Value") is { } v
+                && Gpus.ParseLhmValue(v, "Control") is { Kind: "control" } c)
+                controls[(device ?? "", n)] = c.Value;
+            if (node.TryGetProperty("Children", out var kids) && kids.ValueKind == JsonValueKind.Array)
+                foreach (var k in kids.EnumerateArray()) Controls(k, device);
+        }
+        Controls(root, null);
+        return list.Select(f => controls.TryGetValue((f.Device, f.Name), out var pct) ? f with { Percent = pct } : f).ToList();
+    }
+
+    private static double? ParseRpm(string value) =>
+        Gpus.ParseLhmValue(value, "Fan") is { Kind: "rpm" } r ? r.Value : null;
 
     /// <summary>"1,394 V" / "1.394 V" / "982 mV" as volts, "107,1 W" as watts (any decimal separator).</summary>
     private static (string Kind, double Value)? ParseVoltOrPower(string value)

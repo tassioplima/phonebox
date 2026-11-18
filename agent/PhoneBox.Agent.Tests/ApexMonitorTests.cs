@@ -156,3 +156,28 @@ public sealed class CpuVoltPowerTests
         Assert.Equal((1.25, 65.0), SystemMonitor.FindCpuVoltPower(doc.RootElement));
     }
 }
+
+public sealed class FanTests
+{
+    [Fact]
+    public void PairsEachFanWithItsControlAndSkipsEmptyHeaders()
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse("""
+            { "Text": "Sensor", "Children": [ { "Text": "PC", "Children": [
+              { "Text": "MS-7C95", "HardwareId": "/motherboard", "Children": [
+                { "Text": "Nuvoton NCT6687D", "HardwareId": "/lpc/nct6687d/0", "Children": [
+                  { "Text": "Fans", "Children": [
+                    { "Text": "CPU Fan", "Type": "Fan", "Value": "1295 RPM", "SensorId": "/lpc/nct6687d/0/fan/0" },
+                    { "Text": "System Fan #4", "Type": "Fan", "Value": "0 RPM", "SensorId": "/lpc/nct6687d/0/fan/5" } ] },
+                  { "Text": "Controls", "Children": [
+                    { "Text": "CPU Fan", "Type": "Control", "Value": "61,0 %", "SensorId": "/lpc/nct6687d/0/control/0" },
+                    { "Text": "System Fan #4", "Type": "Control", "Value": "100,0 %", "SensorId": "/lpc/nct6687d/0/control/5" } ] } ] } ] },
+              { "Text": "NVIDIA GeForce RTX 4070 SUPER", "HardwareId": "/gpu-nvidia/0", "Children": [
+                { "Text": "Fans", "Children": [ { "Text": "GPU Fan 1", "Type": "Fan", "Value": "0 RPM", "SensorId": "/gpu-nvidia/0/fan/1" } ] } ] } ] } ] }
+            """);
+        var fans = SystemMonitor.FindFans(doc.RootElement);
+        Assert.Equal(2, fans.Count);
+        Assert.Equal(new FanInfo("CPU Fan", "Nuvoton NCT6687D", 1295, 61), fans[0]);
+        Assert.Equal(new FanInfo("GPU Fan 1", "NVIDIA GeForce RTX 4070 SUPER", 0, null), fans[1]);
+    }
+}

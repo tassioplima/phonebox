@@ -1,4 +1,4 @@
-import { API, PANEL_HEADERS, api, h, haptic, pad, t, toast } from '../main.js';
+import { API, D, PANEL_HEADERS, api, h, haptic, pad, t, toast } from '../main.js';
 import { W } from '../registry.js';
 import { every } from './helpers.js';
 
@@ -173,5 +173,41 @@ W['obs-golive'] = {
     };
     const tick = every(2000, async () => { await load(); render(); });
     return { update: () => { tick(); render(); } };
+  },
+};
+
+// Fans (Computer): every fan LibreHardwareMonitor sees, with its speed and the duty its controller asks for. A pushed
+// value "fans" (a fan controller script, for example) adds its mode on top. Names can be renamed in the options
+// ("CPU Fan=Radiator").
+W.fans = {
+  needs: ['state', 'push'],
+  create(box, { o }) {
+    let lastKey = '';
+    const renames = {};
+    for (const line of o.names || []) { const i = String(line).indexOf('='); if (i > 0) renames[line.slice(0, i).trim()] = line.slice(i + 1).trim(); }
+    return {
+      update() {
+        const fans = D.state?.pc?.fans;
+        const mode = D.push?.fans?.data;
+        const key = JSON.stringify([fans, mode?.value, mode?.sub, box.clientHeight]);
+        if (key === lastKey) return;
+        lastKey = key;
+        const head = h('div', 'fan-head', h('span', 'fan-title', t('fans.title')),
+          mode?.value ? h('span', 'fan-mode fan-' + (mode.level || 'ok'), String(mode.value)) : null);
+        if (!fans) { box.replaceChildren(head, h('div', 'empty', t('fans.needsLhm'))); return; }
+        if (!fans.length) { box.replaceChildren(head, h('div', 'empty', t('fans.none'))); return; }
+        const rows = fans.map((f) => {
+          const pct = f.percent != null ? f.percent : null;
+          const bar = h('div', 'track', h('i'));
+          bar.firstChild.style.width = Math.max(0, Math.min(100, pct ?? 0)) + '%';
+          const stopped = f.rpm <= 0;
+          return h('div', 'fan-row' + (stopped ? ' stopped' : ''),
+            h('div', 'm-row', h('span', null, renames[f.name] || f.name),
+              h('span', null, stopped ? t('fans.stopped') : `${Math.round(f.rpm)} RPM` + (pct != null ? ` · ${Math.round(pct)}%` : ''))),
+            bar);
+        });
+        box.replaceChildren(head, h('div', 'fan-list', rows), mode?.sub ? h('div', 'fan-sub', String(mode.sub)) : null);
+      },
+    };
   },
 };

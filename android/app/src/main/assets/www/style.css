@@ -1307,3 +1307,15 @@ body.controls-top .ap-foot { order: -1; margin-bottom: 4px; }
 .gl-kk { background: linear-gradient(135deg, #53fc18, #2bb10a); color: #06180a; }
 .gl-stop { background: linear-gradient(135deg, #3f3f46, #18181b); border: 3px solid #ef4444; box-shadow: 0 0 4cqh rgba(239, 68, 68, .35); }
 .gl-b:active { filter: brightness(1.2); transform: scale(.97); }
+
+/* Fans (LibreHardwareMonitor) */
+.w-fans { display: flex; flex-direction: column; padding: clamp(10px, 4cqh, 20px) clamp(12px, 4cqw, 22px); --c: #38bdf8; }
+.fan-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.fan-title { font-size: 12px; font-size: clamp(10px, 4.4cqh, 15px); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: #38bdf8; }
+.fan-mode { font-size: 12px; font-size: clamp(10px, 4.4cqh, 15px); font-weight: 700; padding: .2em .7em; border-radius: 99px; background: rgba(74, 222, 128, .15); color: #4ade80; }
+.fan-mode.fan-warn { background: rgba(251, 191, 36, .15); color: #fbbf24; }
+.fan-mode.fan-error { background: rgba(248, 113, 113, .18); color: #f87171; }
+.fan-list { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-evenly; gap: 4px; margin-top: 6px; }
+.fan-list .m-row { font-size: 12px; font-size: clamp(10px, 4.6cqh, 16px); }
+.fan-row.stopped .m-row span:last-child { color: var(--muted); }
+.fan-sub { font-size: 11px; font-size: clamp(9px, 3.8cqh, 13px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 4px; }
